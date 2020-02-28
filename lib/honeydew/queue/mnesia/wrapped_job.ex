@@ -13,9 +13,7 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
 
   @job_filter struct(Job, job_filter_map)
 
-  defstruct [:run_at,
-             :id,
-             :job]
+  defstruct [:run_at, :id, :job]
 
   def record_name, do: @record_name
   def record_fields, do: @record_fields
@@ -30,14 +28,10 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
   end
 
   def from_record({@record_name, {run_at, id}, job}) do
-    %__MODULE__{run_at: run_at,
-                id: id,
-                job: job}
+    %__MODULE__{run_at: run_at, id: id, job: job}
   end
 
-  def to_record(%__MODULE__{run_at: run_at,
-                            id: id,
-                            job: job}) do
+  def to_record(%__MODULE__{run_at: run_at, id: id, job: job}) do
     {@record_name, key(run_at, id), job}
   end
 
@@ -53,7 +47,11 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
     id
   end
 
-  def reset_run_at(%__MODULE__{job: %Job{delay_secs: delay_secs}} = wrapped_job) do
+  def reset_run_at(
+        %__MODULE__{job: %Job{delay_secs: delay_secs, enqueued_at: enqueued_at}} = wrapped_job
+      ) do
+    elapsed = System.system_time(:millisecond) - (enqueued_at + delay_secs * 1_000)
+    new_delay = if elapsed >= 0, do: elapsed, else: 0
     run_at = now() + delay_secs
 
     %__MODULE__{wrapped_job | run_at: run_at}
@@ -88,11 +86,13 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
       }
       |> to_record
 
-    [{
-      pattern,
-      [{:"=<", :"$1", now()}],
-      [:"$_"]
-    }]
+    [
+      {
+        pattern,
+        [{:"=<", :"$1", now()}],
+        [:"$_"]
+      }
+    ]
   end
 
   defp now do
