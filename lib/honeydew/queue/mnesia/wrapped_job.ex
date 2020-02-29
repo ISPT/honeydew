@@ -53,8 +53,10 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
     id
   end
 
-  def set_run_at_to_now(%__MODULE__{} = wrapped_job) do
-    %__MODULE__{wrapped_job | run_at: now()}
+  def recalc_run_at(%__MODULE__{} = wrapped_job) do
+    delta_t = (wrapped_job.job.enqueued_at  + wrapped_job.job.delay_secs * 1000) - System.system_time(:millisecond)
+    delay = if delta_t > 0, do: delta_t, else: 0
+    %__MODULE__{wrapped_job | run_at: now() + (delay / 1000.0)}
   end
 
   def id_pattern(id) do
