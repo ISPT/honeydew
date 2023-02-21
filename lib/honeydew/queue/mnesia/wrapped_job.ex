@@ -2,7 +2,7 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
   alias Honeydew.Job
 
   @record_name :wrapped_job
-  @record_fields [:key, :job]
+  @record_fields [:key, :last_run, :job]
 
   job_filter_map =
     %Job{}
@@ -13,9 +13,7 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
 
   @job_filter struct(Job, job_filter_map)
 
-  defstruct [:run_at,
-             :id,
-             :job]
+  defstruct [:run_at, :last_run, :id, :job]
 
   def record_name, do: @record_name
   def record_fields, do: @record_fields
@@ -23,25 +21,22 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
   def new(%Job{delay_secs: delay_secs} = job) do
     id = :erlang.unique_integer()
     run_at = now() + delay_secs
+    last_run = System.system_time(:millisecond)
 
     job = %{job | private: id}
 
-    %__MODULE__{id: id, job: job, run_at: run_at}
+    %__MODULE__{id: id, job: job, run_at: run_at, last_run: last_run}
   end
 
-  def from_record({@record_name, {run_at, id}, job}) do
-    %__MODULE__{run_at: run_at,
-                id: id,
-                job: job}
+  def from_record({@record_name, {run_at, id}, last_run, job}) do
+    %__MODULE__{run_at: run_at, last_run: last_run, id: id, job: job}
   end
 
-  def to_record(%__MODULE__{run_at: run_at,
-                            id: id,
-                            job: job}) do
-    {@record_name, key(run_at, id), job}
+  def to_record(%__MODULE__{run_at: run_at, last_run: last_run, id: id, job: job}) do
+    {@record_name, key(run_at, id), last_run, job}
   end
 
-  def key({@record_name, key, _job}) do
+  def key({@record_name, key, _last_run, _job}) do
     key
   end
 
@@ -53,16 +48,16 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
     id
   end
 
-  def recalc_run_at(%__MODULE__{} = wrapped_job) do
-    delta_t = (wrapped_job.job.enqueued_at  + wrapped_job.job.delay_secs * 1000) - System.system_time(:millisecond)
-    delay = if delta_t > 0, do: delta_t, else: 0
-    %__MODULE__{wrapped_job | run_at: now() + (delay / 1000.0)}
+  def recalc_run_at(%__MODULE__{last_run: last_run, job: job} = wrapped_job) do
+    delta_t = now - System.system_time(:second)
+    %__MODULE__{wrapped_job | run_at: round(last_run / 1000.0) + delta_t + job.delay_secs}
   end
 
   def id_pattern(id) do
     %__MODULE__{
       id: id,
       run_at: :_,
+      last_run: :_,
       job: :_
     }
     |> to_record
@@ -74,6 +69,7 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
     %__MODULE__{
       id: :_,
       run_at: :_,
+      last_run: :_,
       job: job
     }
     |> to_record
@@ -84,15 +80,18 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
       %__MODULE__{
         id: :_,
         run_at: :"$1",
+        last_run: :"$1",
         job: :_
       }
       |> to_record
 
-    [{
-      pattern,
-      [{:"=<", :"$1", now()}],
-      [:"$_"]
-    }]
+    [
+      {
+        pattern,
+        [{:"=<", :"$1", now()}],
+        [:"$_"]
+      }
+    ]
   end
 
   defp now do
