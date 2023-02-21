@@ -80,7 +80,7 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
       %__MODULE__{
         id: :_,
         run_at: :"$1",
-        last_run: :"$1",
+        last_run: :"_",
         job: :_
       }
       |> to_record
