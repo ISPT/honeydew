@@ -14,7 +14,6 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
   @job_filter struct(Job, job_filter_map)
 
   defstruct [:run_at,
-             :last_run,
              :id,
              :job]
 
@@ -24,11 +23,10 @@ defmodule Honeydew.Queue.Mnesia.WrappedJob do
   def new(%Job{delay_secs: delay_secs} = job) do
     id = :erlang.unique_integer()
     run_at = now() + delay_secs
-    last_run = System.system_time(:millisecond)
 
     job = %{job | private: id}
 
-    %__MODULE__{id: id, job: job, run_at: run_at, last_run: last_run}
+    %__MODULE__{id: id, job: job, run_at: run_at}
   end
 
   def from_record({@record_name, {run_at, id}, job}) do
