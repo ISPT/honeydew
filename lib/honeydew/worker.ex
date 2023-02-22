@@ -217,7 +217,7 @@ defmodule Honeydew.Worker do
   def handle_info({:EXIT, _pid, {:shutdown, _}}, %State{job_runner: nil} = state), do: {:noreply, state}
 
   def handle_info({:EXIT, job_runner, reason}, %State{job_runner: job_runner, queue: queue, job: job} = state) do
-    Logger.warn "[Honeydew] Worker #{inspect queue} (#{inspect self()}) saw its job runner (#{inspect job_runner}) die during a job, restarting..."
+    Logger.warn "[Honeydew] Worker #{inspect queue} (#{inspect self()}) saw its job runner (#{inspect job_runner}) die (reason #{reason}) during a job, restarting..."
     job = %{job | result: {:error, Crash.new(:exit, reason)}}
     {:noreply, state, {:continue, {:job_finished, job}}}
   end
