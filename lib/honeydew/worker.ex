@@ -10,6 +10,7 @@ defmodule Honeydew.Worker do
   alias Honeydew.Job
   alias Honeydew.JobMonitor
   alias Honeydew.Logger, as: HoneydewLogger
+  alias Honeydew.Processes
   alias Honeydew.Queue
   alias Honeydew.JobRunner
   alias Honeydew.Workers
@@ -65,9 +66,7 @@ defmodule Honeydew.Worker do
   def init([_supervisor, queue, %{ma: {module, init_args}, init_retry_secs: init_retry_secs}, queue_pid] = start_opts) do
     Process.flag(:trap_exit, true)
 
-    queue
-    |> Honeydew.group(Workers)
-    |> :pg2.join(self())
+    :ok = Processes.join_group(Workers, queue, self())
 
     has_init_fcn =
       :functions
@@ -111,14 +110,14 @@ defmodule Honeydew.Worker do
           %{state | ready: false}
       end
     rescue e ->
-      HoneydewLogger.worker_init_crashed(module, Crash.new(:exception, e, System.stacktrace()))
+      HoneydewLogger.worker_init_crashed(module, Crash.new(:exception, e, __STACKTRACE__))
       %{state | ready: false}
     catch
       :exit, reason ->
         HoneydewLogger.worker_init_crashed(module, Crash.new(:exit, reason))
         %{state | ready: false}
       e ->
-        HoneydewLogger.worker_init_crashed(module, Crash.new(:throw, e, System.stacktrace()))
+        HoneydewLogger.worker_init_crashed(module, Crash.new(:throw, e, __STACKTRACE__))
         %{state | ready: false}
     end
     |> send_ready_or_callback

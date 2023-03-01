@@ -1,12 +1,12 @@
 defmodule Honeydew.Mixfile do
   use Mix.Project
 
-  @version "1.4.5"
+  @version "1.5.0"
 
   def project do
     [app: :honeydew,
      version: @version,
-     elixir: "~> 1.7",
+     elixir: "~> 1.12.0",
      start_permanent: Mix.env() == :prod,
      docs: docs(),
      deps: deps(),
@@ -16,8 +16,8 @@ defmodule Honeydew.Mixfile do
      dialyzer: [
        plt_add_apps: [:mnesia, :ex_unit],
        flags: [
-         # :unmatched_returns,
-         # :error_handling,
+         :unmatched_returns,
+         :error_handling,
          :race_conditions,
          :no_opaque
        ]
@@ -33,6 +33,7 @@ defmodule Honeydew.Mixfile do
   # Type `mix help compile.app` for more information
   def application do
     [extra_applications: [:logger],
+     included_applications: [:mnesia],
      mod: {Honeydew.Application, []}]
   end
 
@@ -40,7 +41,7 @@ defmodule Honeydew.Mixfile do
     [
       {:ecto, "~> 3.0", optional: true, only: [:dev, :prod]},
       {:ex_doc, ">= 0.0.0", only: :dev},
-      {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
       # {:eflame, git: "git@github.com:slfritchie/eflame", only: :dev},
     ]
   end
