@@ -1,6 +1,7 @@
 defmodule Honeydew.MnesiaQueueIntegrationTest do
   use ExUnit.Case, async: false # shares doctest queue name with ErlangQueue test
   alias Honeydew.Job
+  alias Honeydew.Queue.Mnesia.WrappedJob
   alias Honeydew.Processes
 
   @moduletag :capture_log
@@ -223,7 +224,7 @@ defmodule Honeydew.MnesiaQueueIntegrationTest do
     assert Enum.count(monitors) < 20
   end
 
-  test "resets in-progress jobs after crashing", %{queue: queue} do
+  test "resets in-progress jobs after restart", %{queue: queue} do
     Enum.each(1..10, fn _ ->
       Honeydew.async(fn -> Process.sleep(20_000) end, queue)
     end)
@@ -242,6 +243,30 @@ defmodule Honeydew.MnesiaQueueIntegrationTest do
 
     assert total == 10
     assert in_progress == 0
+  end
+
+  test "resets job run_at after restart", %{queue: queue} do
+    :ok = Honeydew.stop_workers(queue)
+
+    num_jobs = 10
+    delay_secs = 15
+
+    Enum.each(1..num_jobs, fn _ ->
+      Honeydew.async(fn -> Process.sleep(20_000) end, queue, delay_secs: delay_secs)
+    end)
+
+    :ok = Honeydew.stop_queue(queue)
+
+    Process.sleep(2_000) # let the monotonic clock tick
+
+    now = :erlang.monotonic_time(:second)
+    :ok = start_queue(queue)
+
+    queue
+    |> wrapped_jobs()
+    |> Enum.each(fn %WrappedJob{run_at: run_at} ->
+      assert_in_delta run_at, now, 1
+    end)
   end
 
   @tag :skip_worker_pool
@@ -417,5 +442,19 @@ defmodule Honeydew.MnesiaQueueIntegrationTest do
     end
 
     :ok
+  end
+
+  defp wrapped_jobs(queue_name) do
+    alias Honeydew.Queue.Mnesia, as: MnesiaQueue
+
+    table = MnesiaQueue.table_name(queue_name)
+
+    :mnesia.activity(:async_dirty, fn ->
+      :mnesia.foldl(fn wrapped_job_record, list ->
+        [wrapped_job_record | list]
+      end, [], table)
+    end)
+    |> Enum.map(&WrappedJob.from_record/1)
+    |> Enum.reverse()
   end
 end
